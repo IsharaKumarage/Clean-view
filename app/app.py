@@ -26,6 +26,10 @@ os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 def index():
     return render_template('index.html')
 
+@app.route('/features')
+def features():
+    return render_template('features.html')
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
