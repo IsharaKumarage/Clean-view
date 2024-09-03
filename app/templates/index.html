@@ -7,14 +7,47 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h1>Upload Image for Processing</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="file">
-        <input type="submit" value="Upload Image">
-    </form>
-    {% if processed_image %}
-        <h2>Processed Image</h2>
-        <img src="{{ url_for('static', filename='processed_image.jpg') }}" alt="Processed Image">
-    {% endif %}
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Clean-View Logo">
+                <h1></h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/features">Features</a></li> 
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <section class="upload-section">
+            <h2>Upload Image</h2>
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" id="fileInput">
+                <input type="submit" value="Upload Image">
+            </form>
+        </section>
+
+        {% if processed_image %}
+            <section class="processed-image-section">
+                <h2>Processed Image</h2>
+                <div class="image-container">
+                    <img src="{{ url_for('static', filename='processed_image.jpg') }}" alt="Processed Image">
+                </div>
+            </section>
+        {% endif %}
+    </main>
+    <footer>
+        <div class="footer-links">
+            <a href="#">&copy;2024 Clean-View. All rights reserved.</a>
+        </div>
+        <div class="footer-bottom">
+            <p>Designed by Team CleanView</p>
+        </div>
+    </footer>
+    
 </body>
 </html>
