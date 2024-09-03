@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clean-View Features</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Clean-View Logo">
+                
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/features">Features</a></li>
+                    <li><a href="/contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <section class="features-section">
+            <h2>What Can You Do with Clean-View?</h2>
+
+            <h3>Basic Features</h3>
+            <p>With Clean-View, you can start with the basics and get your images looking great in no time:</p>
+            <ul>
+                <li><strong>Upload Your Image:</strong> Easily upload any image and compare the original and edited versions side-by-side.</li>
+                <li><strong>Basic Adjustments:</strong>
+                    <ul>
+                        <li><strong>Color Changes:</strong> Convert images to different color settings like color, black & white, or grayscale.</li>
+                        <li><strong>Transformations:</strong>
+                            <ul>
+                                <li><strong>Rotate:</strong> Turn your images to any angle you need.</li>
+                                <li><strong>Crop:</strong> Cut out parts of the image to focus on what’s important.</li>
+                                <li><strong>Flip:</strong> Mirror your image horizontally or vertically.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+
+            <h3>Advanced Features</h3>
+            <p>Take your image editing to the next level with these advanced tools:</p>
+            <ul>
+                <li><strong>Apply Filters:</strong> Enhance your images with a variety of filters:
+                    <ul>
+                        <li>Sharpening: Bring out fine details.</li>
+                        <li>Smoothing: Reduce noise and blur for a cleaner look.</li>
+                        <li>Edge Detection: Highlight the edges for a dramatic effect.</li>
+                        <li>Embossing: Create a 3D raised effect.</li>
+                    </ul>
+                </li>
+                <li><strong>Adjust Intensity:</strong>
+                    <ul>
+                        <li>Tonal Transformations: Change the tonal ranges for different effects.</li>
+                        <li>Color Balancing: Fine-tune colors for natural or artistic results.</li>
+                    </ul>
+                </li>
+                <li><strong>Image Segmentation:</strong> Break down images into different segments based on specific criteria.</li>
+            </ul>
+
+            <h3>Deep Learning Features</h3>
+            <p>Explore cutting-edge techniques with our deep learning features:</p>
+            <ul>
+                <li><strong>Enhance Image Quality:</strong> Reduce noise and improve sharpness for clearer images.</li>
+                <li><strong>Style Transfer:</strong> Apply the style of one image to another, creating unique blends.</li>
+                <li><strong>Advanced Segmentation:</strong> Divide images into multiple parts with high accuracy.</li>
+                <li><strong>Image Generation with GANs:</strong> Generate new, realistic images based on existing datasets.</li>
+            </ul>
+        </section>
+    </main>
+    <footer>
+        <div class="footer-links">
+            <a href="#">&copy;2024 Clean-View. All rights reserved.</a>
+        </div>
+        <div class="footer-bottom">
+            <p>Designed by Team CleanView</p>
+        </div>
+    </footer>
+    
+</body>
+</html>
