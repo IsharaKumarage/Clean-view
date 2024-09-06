@@ -1,4 +1,4 @@
-# Image Processing Application
+# Clean-View Image Processing Application
 
 ## Overview
 
