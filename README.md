@@ -1,10 +1,28 @@
-# Clean-View
+# Image Processing Application
 
-Clean-View is a digital image processing application designed to handle various image transformations, filters, intensity manipulations, segmentation, and deep learning tasks.
+## Overview
+
+This application provides various image processing features using Tkinter and OpenCV. It allows users to open images, apply color adjustments, and various filters similar to those found in Photoshop.
+
+## Features
+
+- Open and display images.
+- Apply color adjustments and effects.
+- Use filters such as hue/saturation adjustment, sharpening, Gaussian blur, and edge detection.
+- Real-time preview of image modifications.
+
+## Requirements
+
+- Python 3.x
+- `Pillow`
+- `numpy`
+- `opencv-python`
+- `tkinter` (comes pre-installed with Python)
 
 ## Installation
 
-To install the necessary dependencies, run:
+1. **Clone the repository:**
 
-```bash
-pip install -r requirements.txt
+   ```bash
+   git clone <repository-url>
+   cd <repository-directory>
