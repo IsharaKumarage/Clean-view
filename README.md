@@ -1,4 +1,4 @@
-# Clean-View Image Processing Application
+# Clean-View Image Processing Application (Desktop application)
 
 ## Overview
 
