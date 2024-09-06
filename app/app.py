@@ -32,6 +32,9 @@ class ImageProcessorApp:
         # Filters and Adjustments
         self.create_filter_controls()
 
+        # Transformations Controls
+        self.create_transformation_controls()
+
         # Image Labels
         self.original_image_label = tk.Label(self.root, text="Original Image")
         self.original_image_label.grid(row=1, column=0, padx=10, pady=10)
@@ -62,6 +65,30 @@ class ImageProcessorApp:
         self.gaussian_blur_scale.grid(row=4, column=2, padx=10, pady=5)
 
         tk.Checkbutton(self.root, text="Edge Detection", variable=self.edge_detection_var).grid(row=5, column=0, padx=10, pady=5)
+
+    def create_transformation_controls(self):
+        # Rotation Button and Slider
+        self.rotation_var = tk.DoubleVar()
+        self.rotation_scale = tk.Scale(self.root, from_=-180, to=180, orient="horizontal", length=200, label="Rotation (degrees)")
+        self.rotation_scale.grid(row=5, column=1, padx=10, pady=5)
+
+        # Cropping Button and Entry Fields
+        tk.Label(self.root, text="Crop Width:").grid(row=6, column=0, padx=10, pady=5)
+        self.crop_width_var = tk.IntVar(value=100)
+        self.crop_width_entry = tk.Entry(self.root, textvariable=self.crop_width_var)
+        self.crop_width_entry.grid(row=6, column=1, padx=10, pady=5)
+
+        tk.Label(self.root, text="Crop Height:").grid(row=7, column=0, padx=10, pady=5)
+        self.crop_height_var = tk.IntVar(value=100)
+        self.crop_height_entry = tk.Entry(self.root, textvariable=self.crop_height_var)
+        self.crop_height_entry.grid(row=7, column=1, padx=10, pady=5)
+
+        self.crop_button = tk.Button(self.root, text="Apply Crop", command=self.crop_image)
+        self.crop_button.grid(row=8, column=0, padx=10, pady=10)
+
+        # Flipping Button
+        self.flip_button = tk.Button(self.root, text="Flip Colors", command=self.flip_colors)
+        self.flip_button.grid(row=8, column=1, padx=10, pady=10)
 
     def open_image(self):
         file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp")])
@@ -145,6 +172,22 @@ class ImageProcessorApp:
                 image = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
             
             self.modified_image = Image.fromarray(image)
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def crop_image(self):
+        if self.original_image:
+            width = self.crop_width_var.get()
+            height = self.crop_height_var.get()
+            left = (self.original_image.width - width) / 2
+            top = (self.original_image.height - height) / 2
+            right = (self.original_image.width + width) / 2
+            bottom = (self.original_image.height + height) / 2
+            self.modified_image = self.original_image.crop((left, top, right, bottom))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def flip_colors(self):
+        if self.original_image:
+            self.modified_image = ImageOps.invert(self.original_image.convert("RGB"))
             self.display_image(self.modified_image, self.modified_image_label)
 
     def display_image(self, image, label):
