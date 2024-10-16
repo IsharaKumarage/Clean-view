@@ -1,8 +1,10 @@
 import tkinter as tk
 from tkinter import filedialog, ttk
 from PIL import Image, ImageTk, ImageEnhance, ImageOps, ImageFilter
-import cv2
 import numpy as np
+import cv2
+from skimage import segmentation, color, feature, filters
+from sklearn.cluster import KMeans
 
 class ImageProcessorApp:
     def __init__(self, root):
@@ -12,145 +14,422 @@ class ImageProcessorApp:
         # Initialize variables
         self.original_image = None
         self.modified_image = None
+        self.cv_image_path = None  # To store the path of the opened image
+        self.segmented_image = None
 
         # Create UI elements
         self.create_widgets()
 
     def create_widgets(self):
-        # Open Image Button
-        self.open_button = tk.Button(self.root, text="Open Image", command=self.open_image)
-        self.open_button.grid(row=0, column=0, padx=10, pady=10)
+        # Create a frame for the image display
+        self.image_frame = tk.Frame(self.root, width=400, height=600, bg='lightgray')
+        self.image_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
-        # Color Effect Options
-        self.color_effects = ["Reset", "More Natural", "Black and white", "Vintage", "Cartoon",
-                              "Vibrance", "Red", "Green", "Blue", "Gothic"]
-        self.options_var = tk.StringVar()
-        self.options_var.set("Options")
-        self.options_menu = tk.OptionMenu(self.root, self.options_var, *self.color_effects, command=self.adjust_colors)
-        self.options_menu.grid(row=0, column=1, padx=10, pady=10)
+        # Create a frame for the settings area
+        self.settings_frame = ttk.Notebook(self.root)
+        self.settings_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 
-        # Filters and Adjustments
+        # Create tabs
+        self.filter_tab = ttk.Frame(self.settings_frame)
+        self.transformation_tab = ttk.Frame(self.settings_frame)
+        self.color_mode_tab = ttk.Frame(self.settings_frame)
+        self.advanced_tab = ttk.Frame(self.settings_frame)
+        self.intensity_tab = ttk.Frame(self.settings_frame)  # Tab for intensity manipulation
+        self.segmentation_tab = ttk.Frame(self.settings_frame)  # Tab for segmentation
+
+        self.settings_frame.add(self.color_mode_tab, text="Color Modes")
+        self.settings_frame.add(self.filter_tab, text="Filters")
+        self.settings_frame.add(self.transformation_tab, text="Transformations")
+        self.settings_frame.add(self.intensity_tab, text="Intensity Manipulation")
+        self.settings_frame.add(self.segmentation_tab, text="Segmentation")
+        self.settings_frame.add(self.advanced_tab, text="Deep learning features")
+    
+
+        # Configure grid weights for resizing
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=1)
+
+        # Create image labels
+        self.original_image_label = tk.Label(self.image_frame, text="Original Image", bg="lightgray")
+        self.original_image_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        
+        self.modified_image_label = tk.Label(self.image_frame, text="Modified Image", bg="lightgray")
+        self.modified_image_label.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
+        # Create a Menu Bar
+        self.menu_bar = tk.Menu(self.root)
+        self.root.config(menu=self.menu_bar)
+
+        # File Menu
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="Open Image", command=self.open_image)
+        self.file_menu.add_command(label="Save Image", command=self.save_image)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=self.root.quit)
+
+        # Feature settings controls
         self.create_filter_controls()
+        self.create_transformation_controls()
+        self.create_color_mode_controls()
+        self.create_advanced_controls()
+        self.create_intensity_controls()  # Intensity manipulation controls
+        self.create_segmentation_controls()  # Segmentation controls
 
-        # Image Labels
-        self.original_image_label = tk.Label(self.root, text="Original Image")
-        self.original_image_label.grid(row=1, column=0, padx=10, pady=10)
-        self.modified_image_label = tk.Label(self.root, text="Modified Image")
-        self.modified_image_label.grid(row=1, column=1, padx=10, pady=10)
+        # Add Reset Button
+        self.reset_button = tk.Button(self.root, text="Reset", command=self.reset_image)
+        self.reset_button.grid(row=1, column=0, columnspan=2, pady=10, sticky="ew")
 
     def create_filter_controls(self):
         # Filters Button
-        self.filters_button = tk.Button(self.root, text="Apply Filters", command=self.apply_filters)
-        self.filters_button.grid(row=2, column=0, padx=10, pady=10)
+        self.filters_button = tk.Button(self.filter_tab, text="Apply Filters", command=self.apply_filters)
+        self.filters_button.grid(row=0, column=0, padx=10, pady=10, columnspan=3)
 
         # Filter Checkbuttons and Sliders
-        self.hue_saturation_var = tk.BooleanVar()
         self.sharpening_var = tk.BooleanVar()
-        self.gaussian_blur_var = tk.BooleanVar()
+        self.smoothing_var = tk.BooleanVar()
+        self.embossing_var = tk.BooleanVar()
         self.edge_detection_var = tk.BooleanVar()
 
-        tk.Checkbutton(self.root, text="Hue/Saturation", variable=self.hue_saturation_var).grid(row=3, column=0, padx=10, pady=5)
-        self.hue_saturation_scale = tk.Scale(self.root, from_=1, to=10, orient="horizontal", length=200)
-        self.hue_saturation_scale.grid(row=4, column=0, padx=10, pady=5)
+        tk.Checkbutton(self.filter_tab, text="Sharpening", variable=self.sharpening_var).grid(row=1, column=0, padx=10, pady=5)
+        self.sharpening_scale = tk.Scale(self.filter_tab, from_=0.0, to=2.0, orient="horizontal", length=200, resolution=0.1)
+        self.sharpening_scale.grid(row=2, column=0, padx=10, pady=5)
+        self.sharpening_scale.set(1.0)  # Set default value
 
-        tk.Checkbutton(self.root, text="Sharpening", variable=self.sharpening_var).grid(row=3, column=1, padx=10, pady=5)
-        self.sharpening_scale = tk.Scale(self.root, from_=1, to=10, orient="horizontal", length=200)
-        self.sharpening_scale.grid(row=4, column=1, padx=10, pady=5)
+        tk.Checkbutton(self.filter_tab, text="Smoothing", variable=self.smoothing_var).grid(row=1, column=1, padx=10, pady=5)
+        self.smoothing_scale = tk.Scale(self.filter_tab, from_=0.0, to=10.0, orient="horizontal", length=200, resolution=0.1)
+        self.smoothing_scale.grid(row=2, column=1, padx=10, pady=5)
+        self.smoothing_scale.set(1.0)  # Set default value
 
-        tk.Checkbutton(self.root, text="Gaussian Blur", variable=self.gaussian_blur_var).grid(row=3, column=2, padx=10, pady=5)
-        self.gaussian_blur_scale = tk.Scale(self.root, from_=1, to=10, orient="horizontal", length=200)
-        self.gaussian_blur_scale.grid(row=4, column=2, padx=10, pady=5)
+        tk.Checkbutton(self.filter_tab, text="Embossing", variable=self.embossing_var).grid(row=1, column=2, padx=10, pady=5)
+        tk.Checkbutton(self.filter_tab, text="Edge Detection", variable=self.edge_detection_var).grid(row=2, column=2, padx=10, pady=5)
 
-        tk.Checkbutton(self.root, text="Edge Detection", variable=self.edge_detection_var).grid(row=5, column=0, padx=10, pady=5)
+    def create_transformation_controls(self):
+        # Cropping Button and Entry Fields
+        tk.Label(self.transformation_tab, text="Crop Width:").grid(row=1, column=0, padx=10, pady=5)
+        self.crop_width_var = tk.IntVar(value=100)
+        self.crop_width_entry = tk.Entry(self.transformation_tab, textvariable=self.crop_width_var)
+        self.crop_width_entry.grid(row=1, column=1, padx=10, pady=5)
+
+        tk.Label(self.transformation_tab, text="Crop Height:").grid(row=2, column=0, padx=10, pady=5)
+        self.crop_height_var = tk.IntVar(value=100)
+        self.crop_height_entry = tk.Entry(self.transformation_tab, textvariable=self.crop_height_var)
+        self.crop_height_entry.grid(row=2, column=1, padx=10, pady=5)
+
+        self.crop_button = tk.Button(self.transformation_tab, text="Apply Crop", command=self.crop_image)
+        self.crop_button.grid(row=3, column=0, padx=10, pady=10, columnspan=2)
+
+        # Flipping Button
+        self.flip_button = tk.Button(self.transformation_tab, text="Flip Colors", command=self.flip_colors)
+        self.flip_button.grid(row=3, column=2, padx=10, pady=10)
+
+        # Rotation Controls
+        # Rotation by 90 degrees
+        self.rotate_90_button = tk.Button(self.transformation_tab, text="Rotate 90°", command=lambda: self.rotate_fixed(90))
+        self.rotate_90_button.grid(row=4, column=0, padx=10, pady=10)
+
+        # Rotation by 180 degrees
+        self.rotate_180_button = tk.Button(self.transformation_tab, text="Rotate 180°", command=lambda: self.rotate_fixed(180))
+        self.rotate_180_button.grid(row=4, column=1, padx=10, pady=10)
+
+        # Rotation Slider for custom rotation
+        self.custom_rotation_scale = tk.Scale(self.transformation_tab, from_=-180, to=180, orient="horizontal", label="Custom Rotation")
+        self.custom_rotation_scale.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+
+        self.custom_rotation_button = tk.Button(self.transformation_tab, text="Apply Custom Rotation", command=self.apply_custom_rotation)
+        self.custom_rotation_button.grid(row=6, column=0, columnspan=2, padx=10, pady=10)
+
+    def create_color_mode_controls(self):
+        # Color Mode Buttons
+        self.grayscale_button = tk.Button(self.color_mode_tab, text="Convert to Grayscale", command=self.convert_to_grayscale)
+        self.grayscale_button.grid(row=0, column=0, padx=10, pady=10, columnspan=2)
+
+        self.rgb_button = tk.Button(self.color_mode_tab, text="Convert to RGB", command=self.convert_to_rgb)
+        self.rgb_button.grid(row=1, column=0, padx=10, pady=10, columnspan=2)
+
+        self.hsv_button = tk.Button(self.color_mode_tab, text="Convert to HSV", command=self.convert_to_hsv)
+        self.hsv_button.grid(row=2, column=0, padx=10, pady=10, columnspan=2)
+
+        self.cmyk_button = tk.Button(self.color_mode_tab, text="Convert to CMYK", command=self.convert_to_cmyk)
+        self.cmyk_button.grid(row=3, column=0, padx=10, pady=10, columnspan=2)
+
+    def create_advanced_controls(self):
+        # Advanced Deep Learning Features Button (Placeholder)
+        self.deeplearning_button = tk.Button(self.advanced_tab, text="Apply Deep Learning Features", command=self.apply_deep_learning_features)
+        self.deeplearning_button.grid(row=0, column=0, padx=10, pady=10)
+
+    def create_intensity_controls(self):
+        # Intensity Manipulation Buttons
+        self.identity_button = tk.Button(self.intensity_tab, text="Apply Identity Transformation", command=self.apply_identity_transformation)
+        self.identity_button.grid(row=0, column=0, padx=10, pady=10)
+
+        self.negative_button = tk.Button(self.intensity_tab, text="Apply Negative Transformation", command=self.apply_negative_transformation)
+        self.negative_button.grid(row=1, column=0, padx=10, pady=10)
+
+        self.logarithmic_button = tk.Button(self.intensity_tab, text="Apply Logarithmic Transformation", command=self.apply_logarithmic_transformation)
+        self.logarithmic_button.grid(row=2, column=0, padx=10, pady=10)
+
+        self.powerlaw_button = tk.Button(self.intensity_tab, text="Apply Power-Law Transformation", command=self.apply_power_law_transformation)
+        self.powerlaw_button.grid(row=3, column=0, padx=10, pady=10)
+
+        self.inverse_logarithmic_button = tk.Button(self.intensity_tab, text="Apply Inverse Logarithmic Transformation", command=self.apply_inverse_logarithmic_transformation)
+        self.inverse_logarithmic_button.grid(row=4, column=0, padx=10, pady=10)
+
+        self.nth_power_button = tk.Button(self.intensity_tab, text="Apply nth Power Transformation", command=self.apply_nth_power_transformation)
+        self.nth_power_button.grid(row=5, column=0, padx=10, pady=10)
+
+        self.nth_root_button = tk.Button(self.intensity_tab, text="Apply nth Root Transformation", command=self.apply_nth_root_transformation)
+        self.nth_root_button.grid(row=6, column=0, padx=10, pady=10)
+
+    def create_segmentation_controls(self):
+        # Segmentation Controls
+        tk.Label(self.segmentation_tab, text="Segmentation Method:").grid(row=0, column=0, padx=10, pady=10)
+
+        self.segmentation_method = tk.StringVar(value="Thresholding")
+
+        tk.Radiobutton(self.segmentation_tab, text="Thresholding", variable=self.segmentation_method, value="Thresholding").grid(row=1, column=0, padx=10, pady=5)
+        tk.Radiobutton(self.segmentation_tab, text="Edge Detection", variable=self.segmentation_method, value="Edge Detection").grid(row=2, column=0, padx=10, pady=5)
+        tk.Radiobutton(self.segmentation_tab, text="Region-Based", variable=self.segmentation_method, value="Region-Based").grid(row=3, column=0, padx=10, pady=5)
+        tk.Radiobutton(self.segmentation_tab, text="Clustering-Based", variable=self.segmentation_method, value="Clustering-Based").grid(row=4, column=0, padx=10, pady=5)
+
+        self.apply_segmentation_button = tk.Button(self.segmentation_tab, text="Apply Segmentation", command=self.apply_segmentation)
+        self.apply_segmentation_button.grid(row=5, column=0, padx=10, pady=10)
 
     def open_image(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp")])
+        file_path = filedialog.askopenfilename()
         if file_path:
+            self.cv_image_path = file_path
             self.original_image = Image.open(file_path)
-            self.modified_image = self.original_image
+            self.modified_image = self.original_image.copy()
             self.display_image(self.original_image, self.original_image_label)
 
-    def adjust_colors(self, effect):
-        if self.original_image:
-            if effect == "Reset":
-                self.modified_image = self.original_image
-            elif effect == "More Natural":
-                self.modified_image = ImageEnhance.Color(self.original_image).enhance(1.5)
-            elif effect == "Black and white":
-                self.modified_image = self.original_image.convert("L").convert("RGB")
-            elif effect == "Vintage":
-                self.modified_image = self.original_image.convert("RGB")
-                r, g, b = self.modified_image.split()
-                r = r.point(lambda i: i * 0.4)
-                g = g.point(lambda i: i * 0.4)
-                b = b.point(lambda i: i * 0.3)
-                self.modified_image = Image.merge("RGB", (r, g, b))
-            elif effect == "Cartoon":
-                self.modified_image = self.original_image.convert("RGB")
-                self.modified_image = ImageEnhance.Contrast(self.modified_image).enhance(7.0)
-                self.modified_image = ImageEnhance.Color(self.modified_image).enhance(0)
-            elif effect == "Vibrance":
-                self.modified_image = self.original_image.convert("RGB")
-                self.modified_image = ImageEnhance.Contrast(self.modified_image).enhance(2.0)
-                self.modified_image = ImageEnhance.Color(self.modified_image).enhance(2.0)
-            elif effect == "Red":
-                self.modified_image = self.original_image.convert("RGB")
-                r, g, b = self.modified_image.split()
-                r = r.point(lambda i: i * 2.0)
-                self.modified_image = Image.merge("RGB", (r, g, b))
-            elif effect == "Green":
-                self.modified_image = self.original_image.convert("RGB")
-                r, g, b = self.modified_image.split()
-                g = g.point(lambda i: i * 2.0)
-                self.modified_image = Image.merge("RGB", (r, g, b))
-            elif effect == "Blue":
-                self.modified_image = self.original_image.convert("RGB")
-                r, g, b = self.modified_image.split()
-                b = b.point(lambda i: i * 3.0)
-                self.modified_image = Image.merge("RGB", (r, g, b))
-            elif effect == "Gothic":
-                self.modified_image = self.original_image.convert("RGB")
-                r, g, b = self.modified_image.split()
-                r = r.point(lambda i: i * 0.3)
-                g = g.point(lambda i: i * 0.3)
-                b = b.point(lambda i: i * 0.3)
-                self.modified_image = Image.merge("RGB", (r, g, b))
-                self.modified_image = ImageEnhance.Brightness(self.modified_image).enhance(1.1)
-                self.modified_image = ImageEnhance.Contrast(self.modified_image).enhance(3.0)
-                self.modified_image = ImageEnhance.Color(self.modified_image).enhance(0)
-            
-            self.display_image(self.modified_image, self.modified_image_label)
+    def save_image(self):
+        if self.modified_image:
+            file_path = filedialog.asksaveasfilename(defaultextension=".png")
+            if file_path:
+                self.modified_image.save(file_path)
 
-    def apply_filters(self):
-        if self.original_image:
-            image = np.array(self.original_image)
-            if self.hue_saturation_var.get():
-                value = self.hue_saturation_scale.get() / 10.0
-                hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-                hsv_image[:, :, 1] = hsv_image[:, :, 1] * value
-                image = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB)
-            if self.sharpening_var.get():
-                value = self.sharpening_scale.get()
-                kernel = np.array([[-1, -1, -1],
-                                   [-1, value, -1],
-                                   [-1, -1, -1]])
-                image = cv2.filter2D(image, -1, kernel)
-            if self.gaussian_blur_var.get():
-                value = self.gaussian_blur_scale.get()
-                kernel_size = int(2 * value + 1)
-                image = cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
-            if self.edge_detection_var.get():
-                gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-                edges = cv2.Canny(gray_image, 100, 200)
-                image = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
-            
-            self.modified_image = Image.fromarray(image)
+    def reset_image(self):
+        if self.cv_image_path:
+            self.original_image = Image.open(self.cv_image_path)
+            self.modified_image = self.original_image.copy()
+            self.display_image(self.original_image, self.original_image_label)
             self.display_image(self.modified_image, self.modified_image_label)
 
     def display_image(self, image, label):
-        photo = ImageTk.PhotoImage(image)
-        label.config(image=photo)
-        label.image = photo
+        img = ImageTk.PhotoImage(image)
+        label.config(image=img)
+        label.image = img
+
+    def apply_filters(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            if self.sharpening_var.get():
+                kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+                image_cv = cv2.filter2D(image_cv, -1, kernel)
+            if self.smoothing_var.get():
+                ksize = int(self.smoothing_scale.get())
+                image_cv = cv2.GaussianBlur(image_cv, (ksize, ksize), 0)
+            if self.embossing_var.get():
+                kernel = np.array([[0, -1, -1], [1, 0, -1], [1, 1, 1]])
+                image_cv = cv2.filter2D(image_cv, -1, kernel)
+            if self.edge_detection_var.get():
+                image_cv = cv2.Canny(image_cv, 100, 200)
+
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_custom_rotation(self):
+        if self.modified_image:
+            angle = self.custom_rotation_scale.get()
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            (h, w) = image_cv.shape[:2]
+            center = (w / 2, h / 2)
+            matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+            image_cv = cv2.warpAffine(image_cv, matrix, (w, h))
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def rotate_fixed(self, angle):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            (h, w) = image_cv.shape[:2]
+            center = (w / 2, h / 2)
+            matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+            image_cv = cv2.warpAffine(image_cv, matrix, (w, h))
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def crop_image(self):
+        if self.modified_image:
+            width = self.crop_width_var.get()
+            height = self.crop_height_var.get()
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            (h, w) = image_cv.shape[:2]
+            x_center, y_center = w // 2, h // 2
+            x1 = max(x_center - width // 2, 0)
+            y1 = max(y_center - height // 2, 0)
+            x2 = min(x_center + width // 2, w)
+            y2 = min(y_center + height // 2, h)
+            image_cv = image_cv[y1:y2, x1:x2]
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def flip_colors(self):
+        if self.modified_image:
+            self.modified_image = ImageOps.invert(self.modified_image)
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def convert_to_grayscale(self):
+        if self.modified_image:
+            self.modified_image = ImageOps.grayscale(self.modified_image)
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def convert_to_rgb(self):
+        if self.modified_image:
+            self.modified_image = self.modified_image.convert("RGB")
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def convert_to_hsv(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            image_cv = cv2.cvtColor(image_cv, cv2.COLOR_BGR2HSV)
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_HSV2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def convert_to_cmyk(self):
+        if self.modified_image:
+            self.modified_image = self.modified_image.convert("CMYK")
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_deep_learning_features(self):
+        pass  # Placeholder for future deep learning features
+
+    def apply_identity_transformation(self):
+        if self.modified_image:
+            self.modified_image = self.original_image.copy()
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_negative_transformation(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            image_cv = cv2.bitwise_not(image_cv)
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_logarithmic_transformation(self):
+        if self.modified_image:
+            # Convert the image to OpenCV format (BGR)
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            
+            # Convert to float32 for logarithmic transformation
+            image_cv = image_cv.astype(np.float32)
+            
+            # Apply logarithmic transformation
+            image_cv = np.log1p(image_cv)
+            
+            # Normalize to the range [0, 255]
+            image_cv = cv2.normalize(image_cv, None, 0, 255, cv2.NORM_MINMAX)
+            
+            # Convert back to uint8
+            image_cv = np.uint8(image_cv)
+            
+            # Convert back to RGB format for display
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            
+            # Display the modified image
+            self.display_image(self.modified_image, self.modified_image_label)
+
+
+    def apply_power_law_transformation(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            gamma = 1.5  # Example gamma value
+            image_cv = np.power(image_cv / 255.0, gamma) * 255
+            image_cv = np.uint8(image_cv)
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+    
+    def apply_inverse_logarithmic_transformation(self):
+        if self.modified_image:
+            # Convert the image to OpenCV format (BGR)
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            
+            # Convert to float32 for inverse logarithmic transformation
+            image_cv = image_cv.astype(np.float32)
+            
+            # Apply inverse logarithmic transformation
+            image_cv = np.expm1(image_cv)  # exp(x) - 1
+            
+            # Normalize to the range [0, 255]
+            min_val = np.min(image_cv)
+            max_val = np.max(image_cv)
+            
+            # Debugging statements
+            print(f"Before normalization: min = {min_val}, max = {max_val}")
+            
+            if max_val > 0:  # Check to prevent division by zero
+                image_cv = cv2.normalize(image_cv, None, 0, 255, cv2.NORM_MINMAX)
+            else:
+                print("Warning: Max value is zero, normalization skipped.")
+            
+            # Convert back to uint8
+            image_cv = np.clip(image_cv, 0, 255)  # Ensure values are within [0, 255]
+            image_cv = np.uint8(image_cv)
+            
+            # Convert back to RGB format for display
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            
+            # Display the modified image
+            self.display_image(self.modified_image, self.modified_image_label)
+
+
+    def apply_nth_power_transformation(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            n = 2  # Example nth power value
+            image_cv = np.power(image_cv / 255.0, n) * 255
+            image_cv = np.uint8(image_cv)
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_nth_root_transformation(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            n = 2  # Example nth root value
+            image_cv = np.power(image_cv / 255.0, 1/n) * 255
+            image_cv = np.uint8(image_cv)
+            self.modified_image = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_segmentation(self):
+        if self.modified_image:
+            image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
+            method = self.segmentation_method.get()
+
+            if method == "Thresholding":
+                gray = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
+                _, segmented = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+                self.modified_image = Image.fromarray(segmented)
+            elif method == "Edge Detection":
+                segmented = cv2.Canny(image_cv, 100, 200)
+                self.modified_image = Image.fromarray(segmented)
+            elif method == "Region-Based":
+                gray = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
+                _, labels = cv2.connectedComponents(gray)
+                self.modified_image = Image.fromarray(labels.astype(np.uint8) * 255)
+            elif method == "Clustering-Based":
+                pixel_values = image_cv.reshape((-1, 3))
+                pixel_values = np.float32(pixel_values)
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
+                k = 3
+                _, labels, centers = cv2.kmeans(pixel_values, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+                segmented_image = centers[labels.flatten()].reshape(image_cv.shape).astype(np.uint8)
+                self.modified_image = Image.fromarray(segmented_image)
+
+            self.display_image(self.modified_image, self.modified_image_label)
+
 
 if __name__ == "__main__":
     root = tk.Tk()
