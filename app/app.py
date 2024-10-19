@@ -7,8 +7,6 @@ import cv2
 from skimage import segmentation, color, feature, filters
 from sklearn.cluster import KMeans
 import tensorflow as tf
-from styleTransfer import process_style_transfer, upload_content_image, upload_style_image, save_result_image
-
 
 class ImageProcessorApp:
     def __init__(self, root):
