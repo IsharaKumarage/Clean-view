@@ -1,10 +1,14 @@
 import tkinter as tk
 from tkinter import filedialog, ttk
 from PIL import Image, ImageTk, ImageEnhance, ImageOps, ImageFilter
+from matplotlib.image import pil_to_array
 import numpy as np
 import cv2
 from skimage import segmentation, color, feature, filters
 from sklearn.cluster import KMeans
+import tensorflow as tf
+from styleTransfer import process_style_transfer, upload_content_image, upload_style_image, save_result_image
+
 
 class ImageProcessorApp:
     def __init__(self, root):
@@ -42,7 +46,7 @@ class ImageProcessorApp:
         self.settings_frame.add(self.transformation_tab, text="Transformations")
         self.settings_frame.add(self.intensity_tab, text="Intensity Manipulation")
         self.settings_frame.add(self.segmentation_tab, text="Segmentation")
-        self.settings_frame.add(self.advanced_tab, text="Deep learning features")
+        self.settings_frame.add(self.advanced_tab, text="Style Transfer features")
     
 
         # Configure grid weights for resizing
@@ -73,7 +77,7 @@ class ImageProcessorApp:
         self.create_filter_controls()
         self.create_transformation_controls()
         self.create_color_mode_controls()
-        self.create_advanced_controls()
+        self.create_styletransfer_controls()
         self.create_intensity_controls()  # Intensity manipulation controls
         self.create_segmentation_controls()  # Segmentation controls
 
@@ -154,9 +158,9 @@ class ImageProcessorApp:
         self.cmyk_button = tk.Button(self.color_mode_tab, text="Convert to CMYK", command=self.convert_to_cmyk)
         self.cmyk_button.grid(row=3, column=0, padx=10, pady=10, columnspan=2)
 
-    def create_advanced_controls(self):
+    def create_styletransfer_controls(self):
         # Advanced Deep Learning Features Button (Placeholder)
-        self.deeplearning_button = tk.Button(self.advanced_tab, text="Apply Deep Learning Features", command=self.apply_deep_learning_features)
+        self.deeplearning_button = tk.Button(self.advanced_tab, text="Open Style Transfer Feature", command=self.create_styletransfer_controls)
         self.deeplearning_button.grid(row=0, column=0, padx=10, pady=10)
 
     def create_intensity_controls(self):
@@ -197,12 +201,19 @@ class ImageProcessorApp:
         self.apply_segmentation_button.grid(row=5, column=0, padx=10, pady=10)
 
     def open_image(self):
-        file_path = filedialog.askopenfilename()
+        file_path = filedialog.askopenfilename(
+            title="Open Image",
+            filetypes=[("Image Files", "*.jpg;*.jpeg;*.png;*.bmp;*.gif")]  # Add any other formats you want to support
+        )
+        
         if file_path:
-            self.cv_image_path = file_path
-            self.original_image = Image.open(file_path)
-            self.modified_image = self.original_image.copy()
-            self.display_image(self.original_image, self.original_image_label)
+            try:
+                self.cv_image_path = file_path
+                self.original_image = Image.open(file_path)
+                self.modified_image = self.original_image.copy()
+                self.display_image(self.original_image, self.original_image_label)  # Ensure original_image_label is defined
+            except Exception as e:
+                print(f"Error loading image: {e}")  # Handle error gracefully
 
     def save_image(self):
         if self.modified_image:
@@ -300,11 +311,8 @@ class ImageProcessorApp:
 
     def convert_to_cmyk(self):
         if self.modified_image:
-            self.modified_image = self.modified_image.convert("CMYK")
+            self.modififed_image = self.modified_image.convert("CMYK")
             self.display_image(self.modified_image, self.modified_image_label)
-
-    def apply_deep_learning_features(self):
-        pass  # Placeholder for future deep learning features
 
     def apply_identity_transformation(self):
         if self.modified_image:
@@ -352,7 +360,7 @@ class ImageProcessorApp:
             self.display_image(self.modified_image, self.modified_image_label)
     
     def apply_inverse_logarithmic_transformation(self):
-        if self.modified_image:
+         if self.modified_image:
             # Convert the image to OpenCV format (BGR)
             image_cv = cv2.cvtColor(np.array(self.modified_image), cv2.COLOR_RGB2BGR)
             
@@ -429,6 +437,87 @@ class ImageProcessorApp:
                 self.modified_image = Image.fromarray(segmented_image)
 
             self.display_image(self.modified_image, self.modified_image_label)
+
+    def apply_deep_learning_features(self):
+        if self.modified_image:
+            # Convert the modified image to a NumPy array
+            image_np = np.array(self.modified_image)
+
+            # Apply Image Enhancement
+            enhanced_image = self.enhance_image(image_np)
+            self.modified_image = Image.fromarray(enhanced_image)
+            self.display_image(self.modified_image)
+
+            # Apply Style Transfer
+            style_image_path = filedialog.askopenfilename(title="Select Style Image")  # Allow user to select style image
+            if style_image_path:
+                style_image = self.load_and_preprocess_image(style_image_path)
+                self.modified_image = self.style_transfer(image_np, style_image)
+                self.display_image(Image.fromarray(self.modified_image))
+
+            # Apply GAN Image Generation
+            generated_image = self.generate_image_with_gan()
+            self.modified_image = Image.fromarray(generated_image)
+            self.display_image(self.modified_image)
+
+    def enhance_image(self, image):
+        # Noise reduction using Gaussian blur
+        denoised = cv2.GaussianBlur(image, (5, 5), 0)
+        
+        # Sharpening using an unsharp mask
+        sharpened = cv2.addWeighted(image, 1.5, denoised, -0.5, 0)
+        
+        return sharpened
+
+    def load_and_preprocess_image(self, path):
+        img = load_img(path, target_size=(224, 224))  # type: ignore # Load and resize the image
+        img = pil_to_array(img)
+        img = np.expand_dims(img, axis=0)
+        img = tf.keras.applications.vgg19.preprocess_input(img)
+        return img
+
+    def style_transfer(self, content_image, style_image):
+        # Load VGG19 model for feature extraction
+        model = VGG19(weights='imagenet', include_top=False) # type: ignore
+
+        # Define the layers to extract content and style features
+        content_layer = 'block5_conv2'
+        style_layers = [
+            'block1_conv1',
+            'block2_conv1',
+            'block3_conv1',
+            'block4_conv1',
+            'block5_conv1'
+        ]
+
+        # Create models for content and style
+        content_model = model(inputs=model.input, outputs=model.get_layer(content_layer).output)
+        style_models = [model(inputs=model.input, outputs=model.get_layer(layer).output) for layer in style_layers]
+
+        # Extract features
+        content_features = content_model(content_image)
+        style_features = [style_model(style_image) for style_model in style_models]
+
+        # Initialize a target image for optimization
+        target_image = tf.Variable(content_image)
+
+        # Optimization loop
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.02)
+        for _ in range(100):  # Number of iterations
+            with tf.GradientTape() as tape:
+                target_content = content_model(target_image)
+                target_styles = [style_model(target_image) for style_model in style_models]
+
+                # Calculate losses
+                content_loss = tf.reduce_mean((target_content - content_features) ** 2)
+                style_loss = sum(tf.reduce_mean((self.gram_matrix(target_style) - self.gram_matrix(style)) ** 2)
+                                 for target_style, style in zip(target_styles, style_features))
+                
+                total_loss = content_loss + style_loss
+            grads = tape.gradient(total_loss, target_image)
+            optimizer.apply_gradients([(grads, target_image)])
+
+        return np.array(target_image.numpy()[0], dtype=np.uint8)
 
 
 if __name__ == "__main__":
